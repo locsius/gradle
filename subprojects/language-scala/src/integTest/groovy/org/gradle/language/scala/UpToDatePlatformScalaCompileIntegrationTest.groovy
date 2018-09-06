@@ -19,6 +19,7 @@ package org.gradle.language.scala
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.AvailableJavaHomes
 import org.gradle.util.Requires
+import spock.lang.Ignore
 import spock.lang.Unroll
 
 import static org.gradle.api.JavaVersion.VERSION_1_7
@@ -31,6 +32,7 @@ class UpToDatePlatformScalaCompileIntegrationTest extends AbstractIntegrationSpe
         file('app/controller/Person.scala') << "class Person(name: String)"
     }
 
+    @Ignore("TODO upgrade Scala to be Java 9+ compatible or make workers honor javaHome to enable this test again")
     @Requires(adhoc = { AvailableJavaHomes.getJdk(VERSION_1_7) && AvailableJavaHomes.getJdk(VERSION_1_8) })
     def "compile is out of date when changing the java version"() {
         def jdk7 = AvailableJavaHomes.getJdk(VERSION_1_7)
