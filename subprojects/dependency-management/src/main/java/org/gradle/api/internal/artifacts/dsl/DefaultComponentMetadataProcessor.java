@@ -63,6 +63,8 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -115,6 +117,18 @@ public class DefaultComponentMetadataProcessor implements ComponentMetadataProce
         return metadata;
     }
 
+    static final RuleAction<ComponentMetadataDetails> CLASS_BASED_RULE_MARKER = new RuleAction<ComponentMetadataDetails>() {
+        @Override
+        public List<Class<?>> getInputTypes() {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public void execute(ComponentMetadataDetails subject, List<?> inputs) {
+            throw new IllegalStateException("This is a marker rule that should never be executed");
+        }
+    };
+
     private final Instantiator instantiator;
     private final NotationParser<Object, DirectDependencyMetadataImpl> dependencyMetadataNotationParser;
     private final NotationParser<Object, DependencyConstraintMetadataImpl> dependencyConstraintMetadataNotationParser;
@@ -124,9 +138,11 @@ public class DefaultComponentMetadataProcessor implements ComponentMetadataProce
     private final MetadataResolutionContext metadataResolutionContext;
     private final Set<SpecRuleAction<? super ComponentMetadataDetails>> rules;
     private final Set<SpecConfigurableRule> classBasedRules;
+    private final boolean onlyClassBasedRules;
 
     public DefaultComponentMetadataProcessor(Set<SpecRuleAction<? super ComponentMetadataDetails>> rules,
                                              Set<SpecConfigurableRule> classBasedRules,
+                                             boolean onlyClassBasedRules,
                                              Instantiator instantiator,
                                              NotationParser<Object, DirectDependencyMetadataImpl> dependencyMetadataNotationParser,
                                              NotationParser<Object, DependencyConstraintMetadataImpl> dependencyConstraintMetadataNotationParser,
@@ -136,6 +152,7 @@ public class DefaultComponentMetadataProcessor implements ComponentMetadataProce
                                              MetadataResolutionContext resolutionContext) {
         this.rules = rules;
         this.classBasedRules = classBasedRules;
+        this.onlyClassBasedRules = onlyClassBasedRules;
         this.instantiator = instantiator;
         this.dependencyMetadataNotationParser = dependencyMetadataNotationParser;
         this.dependencyConstraintMetadataNotationParser = dependencyConstraintMetadataNotationParser;
@@ -148,9 +165,9 @@ public class DefaultComponentMetadataProcessor implements ComponentMetadataProce
     @Override
     public ModuleComponentResolveMetadata processMetadata(ModuleComponentResolveMetadata metadata) {
         ModuleComponentResolveMetadata updatedMetadata;
-        if (rules.isEmpty() && classBasedRules.isEmpty()) {
+        if (rules.isEmpty()) {
             updatedMetadata = metadata;
-        } else if (rules.isEmpty()) {
+        } else if (onlyClassBasedRules) {
             updatedMetadata = processClassRuleWithCaching(metadata, metadataResolutionContext);
         } else {
             MutableModuleComponentResolveMetadata mutableMetadata = metadata.asMutable();
@@ -168,7 +185,7 @@ public class DefaultComponentMetadataProcessor implements ComponentMetadataProce
     @Override
     public ComponentMetadata processMetadata(ComponentMetadata metadata) {
         ComponentMetadata updatedMetadata;
-        if (rules.isEmpty() && classBasedRules.isEmpty()) {
+        if (rules.isEmpty()) {
             updatedMetadata = metadata;
         } else {
             ShallowComponentMetadataAdapter details = new ShallowComponentMetadataAdapter(componentIdentifierNotationParser, metadata, attributesFactory);
@@ -182,14 +199,21 @@ public class DefaultComponentMetadataProcessor implements ComponentMetadataProce
     }
 
     private void processAllRules(ModuleComponentResolveMetadata metadata, ComponentMetadataDetails details, ModuleVersionIdentifier id) {
+        Iterator<SpecConfigurableRule> classBasedRuleIterator = null;
         for (SpecRuleAction<? super ComponentMetadataDetails> rule : rules) {
-            processRule(rule, metadata, details);
+            if (rule.getAction() == CLASS_BASED_RULE_MARKER) {
+                if (classBasedRuleIterator == null) {
+                    classBasedRuleIterator = classBasedRules.iterator();
+                }
+                processClassRule(classBasedRuleIterator.next(), metadata, details, id, metadataResolutionContext.getInjectingInstantiator());
+            } else {
+                processRule(rule, metadata, details);
+            }
         }
-        processClassRule(metadata, details, id, metadataResolutionContext.getInjectingInstantiator());
     }
 
-    private void processClassRule(final ModuleComponentResolveMetadata metadata, final ComponentMetadataDetails details, ModuleVersionIdentifier id, Instantiator instantiator) {
-        Action<ComponentMetadataContext> action = collectRulesAndCreateAction(id, instantiator);
+    private void processClassRule(SpecConfigurableRule rule, final ModuleComponentResolveMetadata metadata, final ComponentMetadataDetails details, ModuleVersionIdentifier id, Instantiator instantiator) {
+        Action<ComponentMetadataContext> action = collectRulesAndCreateAction(Collections.singleton(rule), id, instantiator);
 
         DefaultComponentMetadataContext componentMetadataContext = new DefaultComponentMetadataContext(details, metadata);
         try {
@@ -202,7 +226,7 @@ public class DefaultComponentMetadataProcessor implements ComponentMetadataProce
     }
 
     private ModuleComponentResolveMetadata processClassRuleWithCaching(final ModuleComponentResolveMetadata metadata, MetadataResolutionContext metadataResolutionContext) {
-        Action<ComponentMetadataContext> action = collectRulesAndCreateAction(metadata.getModuleVersionId(), metadataResolutionContext.getInjectingInstantiator());
+        Action<ComponentMetadataContext> action = collectRulesAndCreateAction(classBasedRules, metadata.getModuleVersionId(), metadataResolutionContext.getInjectingInstantiator());
         if (action instanceof InstantiatingAction) {
             try {
                 return ruleExecutor.execute(metadata, (InstantiatingAction<ComponentMetadataContext>) action, DETAILS_TO_RESULT,
@@ -221,17 +245,17 @@ public class DefaultComponentMetadataProcessor implements ComponentMetadataProce
         return metadata;
     }
 
-    private Action<ComponentMetadataContext> collectRulesAndCreateAction(ModuleVersionIdentifier id, Instantiator instantiator) {
-        if (classBasedRules.isEmpty()) {
+    private Action<ComponentMetadataContext> collectRulesAndCreateAction(Set<SpecConfigurableRule> rules, ModuleVersionIdentifier id, Instantiator instantiator) {
+        if (rules.isEmpty()) {
             return Actions.doNothing();
         }
-        ArrayList<ConfigurableRule<ComponentMetadataContext>> rules = new ArrayList<ConfigurableRule<ComponentMetadataContext>>();
-        for (SpecConfigurableRule classBasedRule : classBasedRules) {
+        ArrayList<ConfigurableRule<ComponentMetadataContext>> collectedRules = new ArrayList<ConfigurableRule<ComponentMetadataContext>>();
+        for (SpecConfigurableRule classBasedRule : rules) {
             if (classBasedRule.getSpec().isSatisfiedBy(id)) {
-                rules.add(classBasedRule.getConfigurableRule());
+                collectedRules.add(classBasedRule.getConfigurableRule());
             }
         }
-        return new InstantiatingAction<ComponentMetadataContext>(new DefaultConfigurableRules<ComponentMetadataContext>(rules), instantiator, new ExceptionHandler());
+        return new InstantiatingAction<ComponentMetadataContext>(new DefaultConfigurableRules<ComponentMetadataContext>(collectedRules), instantiator, new ExceptionHandler());
     }
 
 

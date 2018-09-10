@@ -76,6 +76,7 @@ public class DefaultComponentMetadataHandler implements ComponentMetadataHandler
     private final ImmutableAttributesFactory attributesFactory;
     private final IsolatableFactory isolatableFactory;
     private final ComponentMetadataRuleExecutor ruleExecutor;
+    private boolean onlyClassBasedRules = true;
 
     DefaultComponentMetadataHandler(Instantiator instantiator,
                                     RuleActionAdapter ruleActionAdapter,
@@ -108,14 +109,13 @@ public class DefaultComponentMetadataHandler implements ComponentMetadataHandler
     }
 
     private ComponentMetadataHandler addRule(SpecRuleAction<? super ComponentMetadataDetails> ruleAction) {
-        if (!classBasedRules.isEmpty()) {
-            throw new IllegalArgumentException("Non class based component metadata rules must all be added before class based ones.");
-        }
+        onlyClassBasedRules = false;
         rules.add(ruleAction);
         return this;
     }
 
     private ComponentMetadataHandler addClassBasedRule(SpecConfigurableRule ruleAction) {
+        rules.add(createAllSpecRuleAction(DefaultComponentMetadataProcessor.CLASS_BASED_RULE_MARKER));
         classBasedRules.add(ruleAction);
         return this;
     }
@@ -200,7 +200,7 @@ public class DefaultComponentMetadataHandler implements ComponentMetadataHandler
 
     @Override
     public ComponentMetadataProcessor createComponentMetadataProcessor(MetadataResolutionContext resolutionContext) {
-        return new DefaultComponentMetadataProcessor(rules, classBasedRules, instantiator, dependencyMetadataNotationParser, dependencyConstraintMetadataNotationParser, componentIdentifierNotationParser, attributesFactory, ruleExecutor, resolutionContext);
+        return new DefaultComponentMetadataProcessor(rules, classBasedRules, onlyClassBasedRules, instantiator, dependencyMetadataNotationParser, dependencyConstraintMetadataNotationParser, componentIdentifierNotationParser, attributesFactory, ruleExecutor, resolutionContext);
     }
 
     static class ComponentMetadataDetailsMatchingSpec implements Spec<ComponentMetadataDetails> {

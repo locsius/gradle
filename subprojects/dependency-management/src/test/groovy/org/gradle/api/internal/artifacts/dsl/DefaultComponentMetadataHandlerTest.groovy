@@ -473,15 +473,31 @@ class DefaultComponentMetadataHandlerTest extends Specification {
         "org.gradle" | "lib" | false
     }
 
-    def 'refuses to add an old style rule after a class based one has been added'() {
+    def 'allows to mix old style and class based rules starting with class based'() {
+        def closure = { ComponentMetadataDetails cmd -> }
+
+        when:
         handler.all(TestComponentMetadataRule)
+        handler.all closure
+        handler.all closure
+        handler.all(TestComponentMetadataRule)
+
+        then:
+        noExceptionThrown()
+
+    }
+
+    def 'allows to mix old style and class based rules starting with old style'() {
         def closure = { ComponentMetadataDetails cmd -> }
 
         when:
         handler.all closure
+        handler.all(TestComponentMetadataRule)
+        handler.all closure
+        handler.all(TestComponentMetadataRule)
 
         then:
-        thrown(IllegalArgumentException)
+        noExceptionThrown()
 
     }
 
