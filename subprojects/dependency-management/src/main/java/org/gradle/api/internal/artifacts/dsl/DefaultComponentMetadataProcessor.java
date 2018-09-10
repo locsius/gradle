@@ -17,6 +17,7 @@
 package org.gradle.api.internal.artifacts.dsl;
 
 import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import org.gradle.api.Action;
 import org.gradle.api.InvalidUserCodeException;
 import org.gradle.api.Transformer;
@@ -200,20 +201,41 @@ public class DefaultComponentMetadataProcessor implements ComponentMetadataProce
 
     private void processAllRules(ModuleComponentResolveMetadata metadata, ComponentMetadataDetails details, ModuleVersionIdentifier id) {
         Iterator<SpecConfigurableRule> classBasedRuleIterator = null;
-        for (SpecRuleAction<? super ComponentMetadataDetails> rule : rules) {
+        Iterator<SpecRuleAction<? super ComponentMetadataDetails>> rulesIterator = rules.iterator();
+        SpecRuleAction<? super ComponentMetadataDetails> rule = null;
+        if (rulesIterator.hasNext()) {
+            rule = rulesIterator.next();
+        }
+        while (rule != null) {
             if (rule.getAction() == CLASS_BASED_RULE_MARKER) {
                 if (classBasedRuleIterator == null) {
                     classBasedRuleIterator = classBasedRules.iterator();
                 }
-                processClassRule(classBasedRuleIterator.next(), metadata, details, id, metadataResolutionContext.getInjectingInstantiator());
+                Set<SpecConfigurableRule> classBasedRuleList = Sets.newLinkedHashSet();
+                classBasedRuleList.add(classBasedRuleIterator.next());
+                rule = null;
+                while (rulesIterator.hasNext()) {
+                    rule = rulesIterator.next();
+                    if (rule.getAction() != CLASS_BASED_RULE_MARKER) {
+                        break;
+                    }
+                    classBasedRuleList.add(classBasedRuleIterator.next());
+                    rule = null;
+                }
+                processClassRule(classBasedRuleList, metadata, details, id, metadataResolutionContext.getInjectingInstantiator());
             } else {
                 processRule(rule, metadata, details);
+                if (rulesIterator.hasNext()) {
+                    rule = rulesIterator.next();
+                } else {
+                    rule = null;
+                }
             }
         }
     }
 
-    private void processClassRule(SpecConfigurableRule rule, final ModuleComponentResolveMetadata metadata, final ComponentMetadataDetails details, ModuleVersionIdentifier id, Instantiator instantiator) {
-        Action<ComponentMetadataContext> action = collectRulesAndCreateAction(Collections.singleton(rule), id, instantiator);
+    private void processClassRule(Set<SpecConfigurableRule> rules, final ModuleComponentResolveMetadata metadata, final ComponentMetadataDetails details, ModuleVersionIdentifier id, Instantiator instantiator) {
+        Action<ComponentMetadataContext> action = collectRulesAndCreateAction(rules, id, instantiator);
 
         DefaultComponentMetadataContext componentMetadataContext = new DefaultComponentMetadataContext(details, metadata);
         try {
