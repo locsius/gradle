@@ -18,6 +18,7 @@ package org.gradle.api.internal.artifacts.dependencies;
 import com.google.common.base.Strings;
 import org.gradle.api.Action;
 import org.gradle.api.InvalidUserDataException;
+import org.gradle.api.artifacts.ClientModule;
 import org.gradle.api.artifacts.ExternalModuleDependency;
 import org.gradle.api.artifacts.ModuleIdentifier;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
@@ -111,5 +112,26 @@ public abstract class AbstractExternalModuleDependency extends AbstractModuleDep
             throw new InvalidUserDataException("Name must not be null!");
         }
         return DefaultModuleIdentifier.newId(group, name);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+
+        AbstractExternalModuleDependency that = (AbstractExternalModuleDependency) o;
+        return isContentEqualsFor(that);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = getGroup() != null ? getGroup().hashCode() : 0;
+        result = 31 * result + getName().hashCode();
+        result = 31 * result + (getVersion() != null ? getVersion().hashCode() : 0);
+        return result;
     }
 }

@@ -27,6 +27,8 @@ import javax.annotation.Nullable;
 import java.io.File;
 import java.util.Set;
 
+// TODO why do we override hashCode() but not equals() here?
+@SuppressWarnings("checkstyle:EqualsHashCode")
 public class DefaultSelfResolvingDependency extends AbstractDependency implements SelfResolvingDependencyInternal, FileCollectionDependency {
     private final ComponentIdentifier targetComponentId;
     private final FileCollectionInternal source;
@@ -99,6 +101,14 @@ public class DefaultSelfResolvingDependency extends AbstractDependency implement
     @Override
     public FileCollection getFiles() {
         return source;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = getGroup() != null ? getGroup().hashCode() : 0;
+        result = 31 * result + getName().hashCode();
+        result = 31 * result + (getVersion() != null ? getVersion().hashCode() : 0);
+        return result;
     }
 
 }
