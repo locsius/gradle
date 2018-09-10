@@ -19,11 +19,10 @@ package org.gradle.language.scala
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.AvailableJavaHomes
 import org.gradle.util.Requires
-import spock.lang.Ignore
 import spock.lang.Unroll
 
-import static org.gradle.api.JavaVersion.VERSION_1_7
 import static org.gradle.api.JavaVersion.VERSION_1_8
+import static org.gradle.api.JavaVersion.VERSION_1_9
 
 @Unroll
 class UpToDatePlatformScalaCompileIntegrationTest extends AbstractIntegrationSpec {
@@ -32,30 +31,29 @@ class UpToDatePlatformScalaCompileIntegrationTest extends AbstractIntegrationSpe
         file('app/controller/Person.scala') << "class Person(name: String)"
     }
 
-    @Ignore("TODO upgrade Scala to be Java 9+ compatible or make workers honor javaHome to enable this test again")
-    @Requires(adhoc = { AvailableJavaHomes.getJdk(VERSION_1_7) && AvailableJavaHomes.getJdk(VERSION_1_8) })
+    @Requires(adhoc = { AvailableJavaHomes.getJdk(VERSION_1_8) && AvailableJavaHomes.getJdk(VERSION_1_9) })
     def "compile is out of date when changing the java version"() {
-        def jdk7 = AvailableJavaHomes.getJdk(VERSION_1_7)
         def jdk8 = AvailableJavaHomes.getJdk(VERSION_1_8)
+        def jdk9 = AvailableJavaHomes.getJdk(VERSION_1_9)
 
         def scalaFixture = new LanuageScalaCompilationFixture(temporaryFolder.testDirectory)
         scalaFixture.baseline()
         buildFile << scalaFixture.buildScript()
         when:
-        executer.withJavaHome(jdk7.javaHome)
+        executer.withJavaHome(jdk8.javaHome)
         run 'compileMainJarMainScala'
 
         then:
         executedAndNotSkipped(':compileMainJarMainScala')
 
         when:
-        executer.withJavaHome(jdk7.javaHome)
+        executer.withJavaHome(jdk8.javaHome)
         run 'compileMainJarMainScala'
         then:
         skipped ':compileMainJarMainScala'
 
         when:
-        executer.withJavaHome(jdk8.javaHome)
+        executer.withJavaHome(jdk9.javaHome)
         run 'compileMainJarMainScala'
         then:
         executedAndNotSkipped(':compileMainJarMainScala')
